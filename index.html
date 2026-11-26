@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070707">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DarkTone">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <title>DarkTone Cam</title>
 <style>
   :root{
@@ -129,6 +137,7 @@
   <h1>Dark<span>Tone</span> Cam</h1>
   <p>Cámara con presets tipo Lightroom aplicados en vivo. Captura a la máxima resolución de tu sensor y guarda el resultado ya editado.</p>
   <button class="big" id="bStart">Abrir cámara</button>
+  <button class="big hide" id="bInstall">Instalar la app</button>
   <button class="ghost" id="bNative">Usar la cámara del sistema (máx. calidad)</button>
   <button class="ghost" id="bStart2">Editar una foto de la galería</button>
 </div>
@@ -571,6 +580,22 @@ $("#hNative").onclick = ()=> $("#fileCam").click();
 $("#hClose").onclick = ()=> $("#help").classList.add("hide");
 $("#bStart").onclick = ()=>{ $("#intro").classList.add("hide"); startCam(); };
 $("#bStart2").onclick = ()=> $("#file").click();
+
+/* ---------------- PWA ---------------- */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+}
+let deferredPrompt=null;
+window.addEventListener("beforeinstallprompt", e=>{
+  e.preventDefault(); deferredPrompt=e; $("#bInstall").classList.remove("hide");
+});
+$("#bInstall").onclick = async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt=null; $("#bInstall").classList.add("hide");
+};
+window.addEventListener("appinstalled", ()=> $("#bInstall").classList.add("hide"));
 
 buildPresets(); buildSliders();
 document.addEventListener("visibilitychange", ()=>{

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>DarkTone Cam</title>
+<style>
+  :root{
+    --bg:#070707; --panel:#101010; --line:#242424; --txt:#f2f2f2; --dim:#8a8a8a; --acc:#d9cdb8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden;overscroll-behavior:none;}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;}
+  #view{max-width:100%;max-height:100%;display:block;}
+  body.live #view{width:100%;height:100%;object-fit:cover;}
+  video{display:none;}
+
+  /* ---------- intro ---------- */
+  #intro{position:fixed;inset:0;z-index:50;background:radial-gradient(120% 90% at 50% 0%,#1a1a1a 0%,#060606 60%);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:30px;text-align:center;}
+  #intro h1{font-size:30px;margin:0;font-weight:600;letter-spacing:-.6px;}
+  #intro h1 span{color:var(--acc);}
+  #intro p{margin:0;color:var(--dim);font-size:14px;line-height:1.6;max-width:320px;}
+  .big{background:var(--acc);color:#111;border:0;border-radius:40px;padding:15px 34px;font-size:15px;font-weight:600;}
+  .ghost{background:transparent;color:var(--dim);border:1px solid var(--line);border-radius:40px;padding:13px 26px;font-size:14px;}
+
+  /* ---------- top bar ---------- */
+  #top{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;gap:8px;
+    padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
+    background:linear-gradient(#000c,#0000);}
+  .chipbtn{background:#ffffff14;backdrop-filter:blur(8px);border:0;color:#fff;width:40px;height:40px;border-radius:50%;
+    display:grid;place-items:center;font-size:17px;}
+  #res{margin-left:auto;font-size:10.5px;letter-spacing:.8px;color:#d7d7d7;background:#00000070;
+    border:1px solid #ffffff1f;padding:6px 10px;border-radius:30px;font-variant-numeric:tabular-nums;}
+
+  /* ---------- bottom ---------- */
+  #bottom{position:fixed;left:0;right:0;bottom:0;z-index:20;padding-bottom:calc(env(safe-area-inset-bottom) + 10px);
+    background:linear-gradient(#0000,#000c 32%);}
+  #presets{display:flex;gap:8px;overflow-x:auto;padding:10px 14px 12px;scrollbar-width:none;}
+  #presets::-webkit-scrollbar{display:none;}
+  .ps{flex:0 0 auto;background:#ffffff12;border:1px solid #ffffff17;color:#e6e6e6;font-size:12px;
+    padding:9px 15px;border-radius:30px;white-space:nowrap;}
+  .ps.on{background:var(--acc);color:#111;border-color:var(--acc);font-weight:600;}
+  #row{display:flex;align-items:center;justify-content:space-between;padding:4px 26px 8px;}
+  #shutter{width:72px;height:72px;border-radius:50%;background:#fff;border:4px solid #ffffff3d;
+    box-shadow:0 0 0 2px #0006;}
+  body.photo #shutter{background:var(--acc);}
+  .side{width:52px;height:52px;border-radius:50%;background:#ffffff14;border:0;color:#fff;font-size:19px;
+    display:grid;place-items:center;}
+  .lbl{font-size:10px;color:var(--dim);text-align:center;margin-top:4px;letter-spacing:.5px;}
+  .sidewrap{width:60px;display:flex;flex-direction:column;align-items:center;}
+
+  /* ---------- sliders ---------- */
+  #sheet{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#0c0c0ce6;backdrop-filter:blur(16px);
+    border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:8px 16px calc(env(safe-area-inset-bottom) + 16px);
+    transform:translateY(102%);transition:transform .28s cubic-bezier(.3,.8,.3,1);max-height:72vh;overflow-y:auto;}
+  #sheet.open{transform:translateY(0);}
+  .grab{width:38px;height:4px;background:#3a3a3a;border-radius:3px;margin:6px auto 12px;}
+  .sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .sh b{font-size:13px;font-weight:600;}
+  .sl{margin-bottom:11px;}
+  .sl .t{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:3px;}
+  .sl .t i{font-style:normal;color:var(--acc);font-variant-numeric:tabular-nums;}
+  input[type=range]{width:100%;-webkit-appearance:none;height:22px;background:transparent;margin:0;}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:#333;border-radius:2px;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:var(--acc);margin-top:-7px;}
+  input[type=range]::-moz-range-track{height:2px;background:#333;}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--acc);}
+
+  /* ---------- toast / hint ---------- */
+  #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;background:#000000d9;
+    border:1px solid var(--line);padding:14px 20px;border-radius:14px;font-size:13px;opacity:0;pointer-events:none;
+    transition:opacity .25s;max-width:80%;text-align:center;line-height:1.5;}
+  #toast.on{opacity:1;}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:40;transition:opacity .22s;}
+  #flash.on{opacity:.85;transition:none;}
+  #help{position:fixed;inset:0;z-index:70;background:#000000ee;display:flex;align-items:center;justify-content:center;padding:22px;}
+  #help .card{max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;}
+  #help h2{margin:0 0 12px;font-size:17px;}
+  #help ol{margin:0 0 14px;padding-left:18px;color:#ddd;font-size:13.5px;line-height:1.75;}
+  #help p{color:var(--dim);font-size:12.5px;line-height:1.6;margin:0 0 10px;}
+  #help p.alt{color:var(--acc);}
+  #help b{color:#fff;}
+  .hrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .hrow .big{padding:13px 20px;font-size:13.5px;}
+  .hide{display:none !important;}
+</style>
+</head>
+<body class="live">
+
+<div id="stage">
+  <canvas id="view"></canvas>
+  <video id="vid" playsinline muted autoplay></video>
+</div>
+
+<div id="top">
+  <button class="chipbtn" id="bFlip" title="Cambiar cámara">⇄</button>
+  <button class="chipbtn" id="bNative2" title="Cámara del sistema">📷</button>
+  <button class="chipbtn" id="bPick" title="Abrir foto">🖼</button>
+  <div id="res">—</div>
+</div>
+
+<div id="bottom">
+  <div id="presets"></div>
+  <div id="row">
+    <div class="sidewrap">
+      <button class="side" id="bTune">⚙</button>
+      <div class="lbl">AJUSTES</div>
+    </div>
+    <button id="shutter"></button>
+    <div class="sidewrap">
+      <button class="side" id="bAct">⤓</button>
+      <div class="lbl" id="lAct">GUARDAR</div>
+    </div>
+  </div>
+</div>
+
+<div id="sheet">
+  <div class="grab"></div>
+  <div class="sh"><b>Ajuste fino</b>
+    <span><button class="ghost" id="bReset" style="padding:7px 14px;font-size:12px">Reset</button>
+    <button class="ghost" id="bClose" style="padding:7px 14px;font-size:12px">Listo</button></span></div>
+  <div id="sliders"></div>
+</div>
+
+<div id="intro">
+  <h1>Dark<span>Tone</span> Cam</h1>
+  <p>Cámara con presets tipo Lightroom aplicados en vivo. Captura a la máxima resolución de tu sensor y guarda el resultado ya editado.</p>
+  <button class="big" id="bStart">Abrir cámara</button>
+  <button class="ghost" id="bNative">Usar la cámara del sistema (máx. calidad)</button>
+  <button class="ghost" id="bStart2">Editar una foto de la galería</button>
+</div>
+
+<div id="help" class="hide">
+  <div class="card">
+    <h2>La cámara necesita permiso</h2>
+    <ol>
+      <li>Toca el ícono <b>🔒</b> o <b>⚙</b> que está al lado de la dirección web, arriba en Chrome.</li>
+      <li>Entra a <b>Permisos</b> y pon <b>Cámara → Permitir</b>.</li>
+      <li>Recarga la página.</li>
+    </ol>
+    <p>Si estás viendo esto <b>dentro de la app de Claude</b>, el visor no deja usar la cámara. Copia el link y ábrelo en <b>Chrome</b>.</p>
+    <p class="alt">O usa <b>📷 Cámara del sistema</b>: abre la cámara nativa de tu Infinix (ahí tienes la máxima resolución) y la foto vuelve aquí ya con el filtro.</p>
+    <div class="hrow">
+      <button class="big" id="hNative">📷 Cámara del sistema</button>
+      <button class="ghost" id="hClose">Cerrar</button>
+    </div>
+  </div>
+</div>
+<div id="flash"></div>
+<div id="toast"></div>
+<input type="file" id="file" accept="image/*" class="hide">
+<input type="file" id="fileCam" accept="image/*" capture="environment" class="hide">
+
+<script>
+const VS = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main(){ v_uv = a_pos*0.5+0.5; gl_Position = vec4(a_pos,0.0,1.0); }`;
+
+const FS = `
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_tex;
+uniform vec2 u_texel;
+uniform float u_exposure,u_contrast,u_highlights,u_shadows,u_whites,u_blacks;
+uniform float u_temp,u_tint,u_sat,u_vib,u_fade,u_vignette,u_grain,u_sharp,u_seed;
+uniform float u_hdr,u_roll,u_gamut;
+uniform vec3 u_shTint,u_hlTint;
+
+float luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
+float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+
+/* luminancia local: aproxima el mapeo tonal por zonas del iPhone (Smart HDR) */
+float localLuma(vec2 uv){
+  const float R = 0.020;
+  float s = luma(texture2D(u_tex, uv).rgb) * 2.0;
+  float w = 2.0;
+  for(int i=0;i<8;i++){
+    float a = float(i) * 0.7853981634;
+    vec2 o = vec2(cos(a), sin(a)) * R;
+    s += luma(texture2D(u_tex, clamp(uv+o, 0.002, 0.998)).rgb);
+    w += 1.0;
+  }
+  return s / w;
+}
+
+/* rolloff suave de luces: evita el blanco quemado, deja detalle en ventanas y cielo */
+vec3 rolloff(vec3 x, float amt){
+  const float k = 0.78;
+  vec3 y = min(x, vec3(k)) + (1.0-k) * (1.0 - exp(-max(x - k, 0.0) / (1.0-k)));
+  return mix(x, y, amt);
+}
+
+void main(){
+  vec3 base = texture2D(u_tex, v_uv).rgb;
+
+  /* --- nitidez: unsharp mask de 1 px real (en captura = 1 px del sensor) --- */
+  vec3 b = (texture2D(u_tex, v_uv+vec2(u_texel.x,0.0)).rgb +
+            texture2D(u_tex, v_uv-vec2(u_texel.x,0.0)).rgb +
+            texture2D(u_tex, v_uv+vec2(0.0,u_texel.y)).rgb +
+            texture2D(u_tex, v_uv-vec2(0.0,u_texel.y)).rgb) * 0.25;
+  vec3 c = base + (base - b) * u_sharp * 1.6;
+  c = clamp(c, 0.0, 1.0);
+
+  /* exposicion */
+  c *= exp2(u_exposure);
+
+  /* balance de blancos */
+  c.r *= 1.0 + u_temp*0.30;
+  c.b *= 1.0 - u_temp*0.30;
+  c.g *= 1.0 + u_tint*0.20;
+  c = max(c, 0.0);
+
+  /* --- HDR local estilo iPhone: abre sombras, retiene luces, sube microcontraste --- */
+  if(u_hdr > 0.003){
+    float ll = localLuma(v_uv) * exp2(u_exposure);
+    float lift = 1.0 + u_hdr * 1.15 * (1.0 - smoothstep(0.02, 0.45, ll));
+    float hold = 1.0 - u_hdr * 0.42 * smoothstep(0.52, 1.0, ll);
+    c *= lift * hold;
+    float detail = luma(c) - ll;
+    c += detail * u_hdr * 0.30;
+    c = max(c, 0.0);
+  }
+
+  float l = luma(c);
+  c += c * u_highlights * smoothstep(0.45,1.0,l) * 0.9;
+  c += u_shadows * (1.0 - smoothstep(0.0,0.50,l)) * 0.32;
+  c += u_whites  * smoothstep(0.60,1.0,l) * 0.28;
+  c += u_blacks  * (1.0 - smoothstep(0.0,0.32,l)) * 0.28;
+
+  /* contraste */
+  c = (c - 0.5) * (1.0 + u_contrast) + 0.5;
+  c = max(c, 0.0);
+
+  /* rolloff de luces */
+  c = rolloff(c, u_roll);
+
+  /* fade / negros levantados (look analogico) */
+  c = c * (1.0 - u_fade) + u_fade * 0.17;
+
+  /* split toning */
+  float l2 = clamp(luma(c), 0.0, 1.0);
+  c += u_shTint * (1.0 - smoothstep(0.0,0.60,l2));
+  c += u_hlTint * smoothstep(0.40,1.0,l2);
+  c = max(c, 0.0);
+
+  /* --- color ancho tipo Display P3: expande lo ya saturado, protege la piel --- */
+  float mx = max(c.r,max(c.g,c.b)), mn = min(c.r,min(c.g,c.b));
+  float s = clamp(mx-mn, 0.0, 1.0);
+  float skin = smoothstep(0.02,0.22, c.r-c.g) * smoothstep(0.0,0.18, c.g-c.b);
+  float lg = luma(c);
+  if(u_gamut > 0.003){
+    float g = u_gamut * (1.0 - 0.72*skin);
+    c = mix(vec3(lg), c, clamp(1.0 + g * (0.35 + s*1.45), 0.0, 3.0));
+    lg = luma(c);
+  }
+
+  /* vibrance + saturacion */
+  c = mix(vec3(lg), c, clamp(1.0 + u_vib*(1.0-s), 0.0, 3.0));
+  lg = luma(c);
+  c = mix(vec3(lg), c, clamp(1.0 + u_sat, 0.0, 3.0));
+
+  /* viñeta */
+  float d = distance(v_uv, vec2(0.5));
+  c *= 1.0 - u_vignette * smoothstep(0.22,0.92,d);
+
+  /* grano */
+  float n = rnd(v_uv + u_seed) - 0.5;
+  c += n * u_grain * (1.0 - clamp(luma(c),0.0,1.0)*0.55);
+
+  gl_FragColor = vec4(clamp(c,0.0,1.0), 1.0);
+}`;
+
+/* ---------------- presets ---------------- */
+const BASE = {exposure:0,contrast:0,highlights:0,shadows:0,whites:0,blacks:0,temp:0,tint:0,
+  sat:0,vib:0,fade:0,vignette:0,grain:0,sharp:0.35,hdr:0,roll:0,gamut:0,
+  shR:0,shG:0,shB:0,hlR:0,hlG:0,hlB:0};
+
+const PRESETS = [
+ {n:"Original", v:{sharp:0.25}},
+
+ /* --- familia iPhone --- */
+ {n:"iPhone Natural", v:{hdr:0.38,roll:0.62,gamut:0.20,exposure:0.04,contrast:0.07,
+    highlights:-0.12,shadows:0.06,whites:0.05,temp:0.02,vib:0.10,sharp:0.52}},
+ {n:"iPhone Vivid", v:{hdr:0.44,roll:0.58,gamut:0.42,exposure:0.03,contrast:0.15,
+    highlights:-0.16,shadows:0.04,blacks:-0.06,whites:0.06,temp:0.015,vib:0.20,sat:0.04,sharp:0.62}},
+ {n:"iPhone Warm", v:{hdr:0.36,roll:0.60,gamut:0.26,exposure:0.02,contrast:0.10,
+    highlights:-0.14,shadows:0.05,temp:0.10,tint:0.03,vib:0.14,sharp:0.55,
+    hlR:0.014,hlG:0.006,hlB:-0.012}},
+ {n:"iPhone Dark", v:{hdr:0.30,roll:0.55,gamut:0.24,exposure:-0.40,contrast:0.20,
+    highlights:-0.34,shadows:-0.18,blacks:-0.14,temp:-0.04,sat:-0.10,vib:0.16,
+    fade:0.04,vignette:0.28,grain:0.04,sharp:0.58,shR:-0.028,shG:0.004,shB:0.020}},
+
+ /* --- familia dark tone --- */
+ {n:"Dark Tone", v:{exposure:-0.42,contrast:0.22,highlights:-0.38,shadows:-0.26,blacks:-0.16,
+    temp:-0.05,sat:-0.14,vib:0.10,fade:0.05,vignette:0.30,grain:0.045,sharp:0.55,
+    shR:-0.030,shG:0.004,shB:0.020}},
+ {n:"Low Exposure", v:{exposure:-0.85,contrast:0.16,highlights:-0.25,shadows:-0.30,blacks:-0.12,
+    temp:-0.03,sat:-0.08,fade:0.03,vignette:0.34,grain:0.05,sharp:0.5}},
+ {n:"Matcha", v:{exposure:-0.30,contrast:0.18,highlights:-0.30,shadows:-0.18,temp:-0.12,tint:-0.10,
+    sat:-0.10,vib:0.18,fade:0.06,vignette:0.26,grain:0.04,sharp:0.5,
+    shR:-0.034,shG:0.016,shB:-0.006}},
+ {n:"Brown Sugar", v:{exposure:-0.28,contrast:0.20,highlights:-0.32,shadows:-0.20,blacks:-0.10,
+    temp:0.14,tint:0.03,sat:-0.12,vib:0.12,fade:0.07,vignette:0.28,grain:0.05,sharp:0.5,
+    shR:0.012,shG:-0.004,shB:-0.026, hlR:0.020,hlG:0.008,hlB:-0.014}},
+ {n:"Cinema", v:{exposure:-0.35,contrast:0.26,highlights:-0.40,shadows:-0.22,blacks:-0.14,
+    roll:0.45,sat:-0.06,vib:0.16,fade:0.08,vignette:0.32,grain:0.055,sharp:0.55,
+    shR:-0.034,shG:0.000,shB:0.030, hlR:0.026,hlG:0.010,hlB:-0.020}},
+ {n:"Nítido 4K", v:{exposure:-0.12,contrast:0.16,highlights:-0.18,shadows:-0.08,whites:0.06,blacks:-0.08,
+    hdr:0.22,roll:0.40,gamut:0.14,vib:0.14,sat:-0.04,vignette:0.12,sharp:0.95}},
+ {n:"Clean Dark", v:{exposure:-0.38,contrast:0.12,highlights:-0.22,shadows:-0.16,blacks:-0.10,
+    temp:-0.04,sat:-0.06,vib:0.08,vignette:0.18,grain:0.02,sharp:0.6}},
+ {n:"Night Out", v:{exposure:-0.55,contrast:0.30,highlights:-0.45,shadows:-0.28,blacks:-0.20,
+    hdr:0.25,roll:0.50,temp:-0.08,sat:-0.05,vib:0.22,fade:0.04,vignette:0.40,grain:0.075,sharp:0.5,
+    shR:-0.030,shG:-0.006,shB:0.034}},
+ {n:"B&N Dark", v:{exposure:-0.35,contrast:0.32,highlights:-0.35,shadows:-0.25,blacks:-0.18,
+    sat:-1,fade:0.06,vignette:0.34,grain:0.08,sharp:0.7}}
+];
+
+const SLIDERS = [
+ ["hdr","HDR local (iPhone)",0,1,0.01],["roll","Luces suaves",0,1,0.01],
+ ["gamut","Color P3",0,1,0.01],
+ ["exposure","Exposición",-2,2,0.01],["contrast","Contraste",-1,1,0.01],
+ ["highlights","Luces",-1,1,0.01],["shadows","Sombras",-1,1,0.01],
+ ["whites","Blancos",-1,1,0.01],["blacks","Negros",-1,1,0.01],
+ ["temp","Temperatura",-1,1,0.01],["tint","Tinte",-1,1,0.01],
+ ["vib","Intensidad",-1,1,0.01],["sat","Saturación",-1,1,0.01],
+ ["sharp","Nitidez",0,1.5,0.01],["fade","Desvanecido",0,0.6,0.01],
+ ["vignette","Viñeta",0,1,0.01],["grain","Grano",0,0.25,0.005]
+];
+
+/* ---------------- estado ---------------- */
+let P = Object.assign({}, BASE, PRESETS[1].v);
+let mode = "live";          // live | photo
+let facing = "environment";
+let stream=null, track=null, imgCap=null, photoBitmap=null, raf=null, maxTex=4096;
+
+const $ = s => document.querySelector(s);
+const view=$("#view"), vid=$("#vid");
+
+/* ---------------- webgl ---------------- */
+const gl = view.getContext("webgl", {preserveDrawingBuffer:true, antialias:false, alpha:false, desynchronized:true})
+        || view.getContext("experimental-webgl", {preserveDrawingBuffer:true});
+if(!gl){ toast("Tu navegador no soporta WebGL."); }
+
+function sh(t,src){ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER,VS));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog); gl.useProgram(prog);
+maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog,"a_pos");
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos,2,gl.FLOAT,false,0,0);
+
+const tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+const U = {};
+["u_texel","u_exposure","u_contrast","u_highlights","u_shadows","u_whites","u_blacks","u_temp","u_tint",
+ "u_sat","u_vib","u_fade","u_vignette","u_grain","u_sharp","u_seed","u_shTint","u_hlTint","u_tex",
+ "u_hdr","u_roll","u_gamut"]
+ .forEach(k => U[k] = gl.getUniformLocation(prog,k));
+
+function pushUniforms(w,h){
+  gl.uniform2f(U.u_texel, 1/w, 1/h);
+  gl.uniform1f(U.u_exposure,P.exposure); gl.uniform1f(U.u_contrast,P.contrast);
+  gl.uniform1f(U.u_highlights,P.highlights); gl.uniform1f(U.u_shadows,P.shadows);
+  gl.uniform1f(U.u_whites,P.whites); gl.uniform1f(U.u_blacks,P.blacks);
+  gl.uniform1f(U.u_temp,P.temp); gl.uniform1f(U.u_tint,P.tint);
+  gl.uniform1f(U.u_sat,P.sat); gl.uniform1f(U.u_vib,P.vib);
+  gl.uniform1f(U.u_fade,P.fade); gl.uniform1f(U.u_vignette,P.vignette);
+  gl.uniform1f(U.u_grain,P.grain); gl.uniform1f(U.u_sharp,P.sharp);
+  gl.uniform1f(U.u_hdr,P.hdr); gl.uniform1f(U.u_roll,P.roll); gl.uniform1f(U.u_gamut,P.gamut);
+  gl.uniform1f(U.u_seed, Math.random()*50);
+  gl.uniform3f(U.u_shTint,P.shR,P.shG,P.shB);
+  gl.uniform3f(U.u_hlTint,P.hlR,P.hlG,P.hlB);
+  gl.uniform1i(U.u_tex,0);
+}
+
+function draw(source, w, h){
+  if(view.width!==w || view.height!==h){ view.width=w; view.height=h; }
+  gl.viewport(0,0,w,h);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE, source); }catch(e){ return false; }
+  pushUniforms(w,h);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  return true;
+}
+
+/* ---------------- loop en vivo ---------------- */
+const PREVIEW_MAX = 1200;
+function loop(){
+  raf = requestAnimationFrame(loop);
+  if(mode!=="live" || !vid.videoWidth) return;
+  let w=vid.videoWidth, h=vid.videoHeight;
+  const sc = Math.min(1, PREVIEW_MAX/Math.max(w,h));
+  draw(vid, Math.round(w*sc), Math.round(h*sc));
+}
+
+/* ---------------- cámara ---------------- */
+async function startCam(){
+  stopCam();
+  const tries = [
+    {width:{ideal:3840},height:{ideal:2160}},
+    {width:{ideal:2560},height:{ideal:1440}},
+    {width:{ideal:1920},height:{ideal:1080}},
+    {}
+  ];
+  for(const t of tries){
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video: Object.assign({facingMode:{ideal:facing}, frameRate:{ideal:30}}, t)
+      });
+      break;
+    }catch(e){ if(t===tries[tries.length-1]){ $("#help").classList.remove("hide"); return; } }
+  }
+  vid.srcObject = stream;
+  await vid.play().catch(()=>{});
+  track = stream.getVideoTracks()[0];
+  try{ await track.applyConstraints({advanced:[{focusMode:"continuous"},{whiteBalanceMode:"continuous"},{exposureMode:"continuous"}]}); }catch(e){}
+  try{ if(window.ImageCapture) imgCap = new ImageCapture(track); }catch(e){ imgCap=null; }
+
+  const st = track.getSettings();
+  let label = `${st.width}×${st.height}`;
+  try{
+    const caps = await (imgCap && imgCap.getPhotoCapabilities ? imgCap.getPhotoCapabilities() : null);
+    if(caps && caps.imageWidth && caps.imageWidth.max)
+      label = `FOTO ${caps.imageWidth.max}×${caps.imageHeight.max}`;
+  }catch(e){}
+  $("#res").textContent = label;
+  mode="live"; document.body.className="live";
+  if(!raf) loop();
+}
+function stopCam(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; imgCap=null; } }
+
+/* ---------------- captura a máxima resolución ---------------- */
+async function capture(){
+  if(mode==="photo"){ save(); return; }
+  flash();
+  let src=null, w=0, h=0;
+  if(imgCap){
+    try{
+      const blob = await imgCap.takePhoto();
+      const bmp = await createImageBitmap(blob, {imageOrientation:"from-image"});
+      src=bmp; w=bmp.width; h=bmp.height;
+    }catch(e){ src=null; }
+  }
+  if(!src){ src=vid; w=vid.videoWidth; h=vid.videoHeight; }
+  if(!w){ toast("No pude capturar."); return; }
+
+  // respaldo: pasamos por un canvas 2D (más compatible que subir el bitmap directo)
+  const cv = document.createElement("canvas");
+  const sc = Math.min(1, maxTex/Math.max(w,h));
+  cv.width=Math.round(w*sc); cv.height=Math.round(h*sc);
+  cv.getContext("2d").drawImage(src,0,0,cv.width,cv.height);
+  if(src.close) src.close();
+
+  photoBitmap = cv;
+  enterPhoto();
+}
+
+function enterPhoto(){
+  mode="photo"; document.body.className="photo";
+  $("#lAct").textContent="CÁMARA"; $("#bAct").textContent="↺";
+  $("#res").textContent = `${photoBitmap.width}×${photoBitmap.height}`;
+  render();
+  toast("Toca los presets para cambiar el look.<br>El botón grande guarda la foto.");
+}
+function render(){ if(photoBitmap) draw(photoBitmap, photoBitmap.width, photoBitmap.height); }
+
+let dl = null;
+if(window.claude && claude.use) claude.use("downloads").then(d=>{ dl=d; }).catch(()=>{});
+
+function save(){
+  view.toBlob(async b=>{
+    const name = `darktone_${Date.now()}.jpg`;
+    if(dl){
+      try{ await dl.save({filename:name, data:b}); toast("Guardada \u2713"); return; }
+      catch(err){
+        if(err && err.code==="declined") return;
+        toast("No se pudo guardar aquí.<br>Abre el link en tu navegador.");
+        return;
+      }
+    }
+    const url=URL.createObjectURL(b);
+    const a=document.createElement("a");
+    a.href=url; a.download=name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    toast("Guardada en tus descargas \u2713");
+  },"image/jpeg",0.96);
+}
+
+/* ---------------- UI ---------------- */
+function buildPresets(){
+  const box=$("#presets"); box.innerHTML="";
+  PRESETS.forEach((p,i)=>{
+    const b=document.createElement("button");
+    b.className="ps"+(i===1?" on":""); b.textContent=p.n;
+    b.onclick=()=>{
+      document.querySelectorAll(".ps").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+      P = Object.assign({}, BASE, p.v);
+      syncSliders(); if(mode==="photo") render();
+    };
+    box.appendChild(b);
+  });
+}
+function buildSliders(){
+  const box=$("#sliders"); box.innerHTML="";
+  SLIDERS.forEach(([k,label,mn,mx,st])=>{
+    const d=document.createElement("div"); d.className="sl";
+    d.innerHTML=`<div class="t"><span>${label}</span><i id="v_${k}">0</i></div>
+      <input type="range" id="s_${k}" min="${mn}" max="${mx}" step="${st}">`;
+    box.appendChild(d);
+    const inp=d.querySelector("input");
+    inp.oninput=()=>{ P[k]=parseFloat(inp.value); $("#v_"+k).textContent=(+inp.value).toFixed(2);
+      if(mode==="photo") render(); };
+  });
+  syncSliders();
+}
+function syncSliders(){
+  SLIDERS.forEach(([k])=>{ const s=$("#s_"+k); if(s){ s.value=P[k]; $("#v_"+k).textContent=(+P[k]).toFixed(2); } });
+}
+function toast(html){ const t=$("#toast"); t.innerHTML=html; t.classList.add("on");
+  clearTimeout(t._x); t._x=setTimeout(()=>t.classList.remove("on"),2600); }
+function flash(){ const f=$("#flash"); f.classList.add("on"); setTimeout(()=>f.classList.remove("on"),30); }
+
+$("#shutter").onclick = capture;
+$("#bAct").onclick = ()=>{ if(mode==="photo"){ photoBitmap=null; $("#lAct").textContent="GUARDAR"; $("#bAct").textContent="⤓"; startCam(); } else save(); };
+$("#bFlip").onclick = ()=>{ facing = facing==="environment" ? "user" : "environment"; startCam(); };
+$("#bTune").onclick = ()=> $("#sheet").classList.toggle("open");
+$("#bClose").onclick = ()=> $("#sheet").classList.remove("open");
+$("#bReset").onclick = ()=>{ P=Object.assign({},BASE); syncSliders(); if(mode==="photo") render();
+  document.querySelectorAll(".ps").forEach(x=>x.classList.remove("on")); };
+$("#bPick").onclick = ()=> $("#file").click();
+async function loadFile(f){
+  if(!f) return;
+  try{
+    const bmp = await createImageBitmap(f, {imageOrientation:"from-image"});
+    const sc = Math.min(1, maxTex/Math.max(bmp.width,bmp.height));
+    const cv = document.createElement("canvas");
+    cv.width=Math.round(bmp.width*sc); cv.height=Math.round(bmp.height*sc);
+    cv.getContext("2d").drawImage(bmp,0,0,cv.width,cv.height);
+    bmp.close && bmp.close();
+    stopCam(); photoBitmap=cv;
+    $("#intro").classList.add("hide"); $("#help").classList.add("hide");
+    enterPhoto();
+  }catch(err){ toast("No pude abrir esa imagen."); }
+}
+$("#file").onchange = e=>{ loadFile(e.target.files[0]); e.target.value=""; };
+$("#fileCam").onchange = e=>{ loadFile(e.target.files[0]); e.target.value=""; };
+$("#bNative").onclick = ()=> $("#fileCam").click();
+$("#bNative2").onclick = ()=> $("#fileCam").click();
+$("#hNative").onclick = ()=> $("#fileCam").click();
+$("#hClose").onclick = ()=> $("#help").classList.add("hide");
+$("#bStart").onclick = ()=>{ $("#intro").classList.add("hide"); startCam(); };
+$("#bStart2").onclick = ()=> $("#file").click();
+
+buildPresets(); buildSliders();
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden){ stopCam(); }
+  else if(mode==="live" && $("#intro").classList.contains("hide")){ startCam(); }
+});
+</script>
+</body>
+</html>
